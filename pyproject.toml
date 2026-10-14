@@ -1,0 +1,66 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "siliconmark"
+version = "0.1.0"
+description = "Standardized bare-metal hardware benchmark suite measuring LLM prefill TFLOPS, decode memory bandwidth saturation, and attention kernel efficiency"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [
+    { name = "Alexandr Motologa", email = "alexandr@mtlg.site" }
+]
+keywords = [
+    "llm",
+    "benchmarking",
+    "pytorch",
+    "hardware",
+    "tflops",
+    "memory-bandwidth",
+    "attention",
+    "cuda",
+    "rocm",
+    "apple-silicon"
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: System :: Benchmark",
+]
+dependencies = [
+    "torch>=2.1.0",
+    "numpy>=1.24.0",
+    "pydantic>=2.5.0",
+    "typer>=0.12.0",
+    "rich>=13.0.0",
+    "fastapi>=0.110.0",
+    "uvicorn>=0.28.0",
+    "psutil>=5.9.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "httpx>=0.27.0",
+]
+
+[project.scripts]
+siliconmark = "siliconmark.cli.main:app"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+asyncio_mode = "auto"

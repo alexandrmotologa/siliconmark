@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SiliconMark - Bare-Metal LLM Hardware Benchmark</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <header>
+      <div class="brand">
+        <div class="logo-icon">Σ</div>
+        <div class="brand-text">
+          <h1>SiliconMark</h1>
+          <p>Bare-Metal LLM Hardware Benchmark Suite</p>
+        </div>
+      </div>
+      <div class="header-status">
+        <div class="device-badge" id="headerDeviceBadge">
+          <span class="badge-dot"></span>
+          <span id="headerDeviceName">Detecting hardware...</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Scorecard Hero -->
+    <section class="score-hero">
+      <div class="score-main">
+        <div class="score-title">SiliconMark Standardized Index</div>
+        <div class="score-number-row">
+          <div class="score-value" id="overallScore">---</div>
+          <div class="grade-badge" id="gradeBadge">--</div>
+        </div>
+        <div class="tier-label" id="tierLabel">Run a benchmark to calculate standardized score</div>
+        
+        <div class="relative-bars">
+          <div class="rel-item">
+            <div class="rel-header">
+              <span>vs NVIDIA RTX 4090 Baseline (10,000 pts)</span>
+              <span id="rtx4090Pct">0.0%</span>
+            </div>
+            <div class="progress-track">
+              <div class="progress-fill fill-cyan" id="rtx4090Bar" style="width: 0%"></div>
+            </div>
+          </div>
+          <div class="rel-item">
+            <div class="rel-header">
+              <span>vs Apple M3 Max Baseline (7,500 pts)</span>
+              <span id="m3maxPct">0.0%</span>
+            </div>
+            <div class="progress-track">
+              <div class="progress-fill fill-amber" id="m3maxBar" style="width: 0%"></div>
+            </div>
+          </div>
+        </div>
+
+        <div style="margin-top: 16px; display: flex; gap: 8px;" id="exportActionsGroup">
+          <button class="btn-small" id="btnExportMd" style="display: none;">Export Markdown</button>
+          <button class="btn-small" id="btnExportJson" style="display: none;">Export JSON</button>
+        </div>
+      </div>
+
+      <div class="score-pillars">
+        <div class="pillar-card">
+          <div class="pillar-info">
+            <h4>Decode Memory Bandwidth</h4>
+            <p>45% weight • Streaming saturation</p>
+          </div>
+          <div class="pillar-score" id="decodeScore">---</div>
+        </div>
+        <div class="pillar-card">
+          <div class="pillar-info">
+            <h4>Prefill Compute (TFLOPS)</h4>
+            <p>35% weight • Dense GEMM throughput</p>
+          </div>
+          <div class="pillar-score" id="prefillScore">---</div>
+        </div>
+        <div class="pillar-card">
+          <div class="pillar-info">
+            <h4>Attention Efficiency</h4>
+            <p>20% weight • SDPA kernel speedup</p>
+          </div>
+          <div class="pillar-score" id="attentionScore">---</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Controls & Hardware Grid -->
+    <div class="grid-2">
+      <!-- Hardware Specs Card -->
+      <section class="card">
+        <div class="card-title">
+          <span>Active Silicon Specifications</span>
+          <span style="font-size: 12px; color: var(--text-muted);" id="platformLabel">Probing...</span>
+        </div>
+        <div class="specs-list" id="hardwareSpecsList">
+          <div class="spec-row"><span class="spec-label">Device Name</span><span class="spec-val" id="specDeviceName">---</span></div>
+          <div class="spec-row"><span class="spec-label">Compute Backend</span><span class="spec-val" id="specBackend">---</span></div>
+          <div class="spec-row"><span class="spec-label">Total / Free Memory</span><span class="spec-val" id="specMemory">---</span></div>
+          <div class="spec-row"><span class="spec-label">Compute Units</span><span class="spec-val" id="specCores">---</span></div>
+          <div class="spec-row"><span class="spec-label">Theoretical Peak Bandwidth</span><span class="spec-val" id="specTheoBw">---</span></div>
+          <div class="spec-row"><span class="spec-label">Theoretical Peak FP16</span><span class="spec-val" id="specTheoFp16">---</span></div>
+          <div class="spec-row"><span class="spec-label">PyTorch Runtime</span><span class="spec-val" id="specTorch">---</span></div>
+        </div>
+      </section>
+
+      <!-- Benchmark Controls -->
+      <section class="card">
+        <div class="card-title">Benchmark Execution Engine</div>
+        <div class="controls-form">
+          <div class="toggle-group">
+            <label class="checkbox-label">
+              <input type="checkbox" id="chkQuickMode" checked> Quick Mode (abbreviated matrix)
+            </label>
+            <label class="checkbox-label">
+              <input type="checkbox" id="chkDecode" checked> Decode Bandwidth
+            </label>
+            <label class="checkbox-label">
+              <input type="checkbox" id="chkPrefill" checked> Prefill TFLOPS
+            </label>
+            <label class="checkbox-label">
+              <input type="checkbox" id="chkAttention" checked> SDPA Attention
+            </label>
+          </div>
+
+          <button class="btn-primary" id="btnRunBenchmark">
+            <span id="btnText">Execute Benchmark Suite</span>
+          </button>
+
+          <!-- Live Progress -->
+          <div class="benchmark-progress" id="benchProgress">
+            <div class="progress-status">
+              <span id="benchStatusText">Executing benchmark...</span>
+              <span id="benchPctText">0%</span>
+            </div>
+            <div class="progress-track">
+              <div class="progress-fill fill-cyan" id="benchProgressBar" style="width: 0%"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- LLM Inference & Sizing Estimator Card -->
+    <section class="card" style="margin-bottom: 24px;">
+      <div class="card-title">LLM Inference & Sizing Estimator</div>
+      <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 16px;">
+        Predict real-world token generation rates and physical VRAM memory footprint for leading LLMs based on measured hardware capabilities.
+      </p>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 20px;">
+        <div>
+          <label style="font-size: 12px; color: var(--text-secondary); display: block; margin-bottom: 6px;">Model Architecture</label>
+          <select id="selEstimatorModel" style="width: 100%; padding: 8px 12px; background: var(--bg-card); border: 1px solid var(--border-color); color: #f8fafc; border-radius: 6px; font-size: 13px;">
+            <option value="llama-3-8b">Meta Llama-3-8B</option>
+            <option value="llama-3-70b">Meta Llama-3-70B</option>
+            <option value="qwen-2.5-7b">Qwen-2.5-7B</option>
+            <option value="qwen-2.5-14b">Qwen-2.5-14B</option>
+            <option value="qwen-2.5-32b">Qwen-2.5-32B</option>
+            <option value="mistral-7b">Mistral-7B-v0.3</option>
+            <option value="mixtral-8x7b">Mixtral-8x7B (MoE)</option>
+            <option value="deepseek-v3-moe">DeepSeek-V3 (MoE 671B)</option>
+            <option value="gemma-2-9b">Google Gemma-2-9B</option>
+            <option value="phi-3-mini">Microsoft Phi-3-Mini (3.8B)</option>
+          </select>
+        </div>
+
+        <div>
+          <label style="font-size: 12px; color: var(--text-secondary); display: block; margin-bottom: 6px;">Quantization</label>
+          <select id="selEstimatorQuant" style="width: 100%; padding: 8px 12px; background: var(--bg-card); border: 1px solid var(--border-color); color: #f8fafc; border-radius: 6px; font-size: 13px;">
+            <option value="q4_k_m" selected>Q4_K_M (4.5 bits)</option>
+            <option value="q8_0">Q8_0 (8.5 bits)</option>
+            <option value="fp16">FP16 / BF16 (16 bits)</option>
+            <option value="q6_k">Q6_K (6.5 bits)</option>
+            <option value="q2_k">Q2_K (2.6 bits)</option>
+          </select>
+        </div>
+
+        <div>
+          <label style="font-size: 12px; color: var(--text-secondary); display: block; margin-bottom: 6px;">Context Tokens</label>
+          <input type="number" id="numEstimatorContext" value="4096" step="1024" min="512" max="131072" style="width: 100%; padding: 8px 12px; background: var(--bg-card); border: 1px solid var(--border-color); color: #f8fafc; border-radius: 6px; font-size: 13px;" />
+        </div>
+
+        <div>
+          <label style="font-size: 12px; color: var(--text-secondary); display: block; margin-bottom: 6px;">Action</label>
+          <button class="btn-primary" id="btnRunEstimate" style="padding: 8px 16px; margin: 0; width: 100%;">
+            Calculate Estimates
+          </button>
+        </div>
+      </div>
+
+      <!-- Estimator Output Cards -->
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px;" id="estimatorResultsGrid">
+        <div class="pillar-card">
+          <div class="pillar-info">
+            <h4>Expected Decode Speed</h4>
+            <p>Single stream tokens/second</p>
+          </div>
+          <div class="pillar-score" id="estDecodeSpeed" style="color: var(--accent-green);">---</div>
+        </div>
+        <div class="pillar-card">
+          <div class="pillar-info">
+            <h4>Total VRAM Footprint</h4>
+            <p>Weights + KV Cache + Overhead</p>
+          </div>
+          <div class="pillar-score" id="estTotalVram">---</div>
+        </div>
+        <div class="pillar-card">
+          <div class="pillar-info">
+            <h4>Prefill Speed</h4>
+            <p>Prompt ingestion tok/sec</p>
+          </div>
+          <div class="pillar-score" id="estPrefillSpeed" style="color: var(--accent-cyan);">---</div>
+        </div>
+        <div class="pillar-card">
+          <div class="pillar-info">
+            <h4>Memory Fit Status</h4>
+            <p id="estFitDescription">---</p>
+          </div>
+          <div class="pillar-score" id="estFitBadge" style="font-size: 18px;">---</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Benchmark Deep-Dive Tabs -->
+    <section class="card" style="margin-bottom: 24px;">
+      <div class="tabs">
+        <button class="tab-btn active" data-tab="tabDecode">Decode Memory Bandwidth</button>
+        <button class="tab-btn" data-tab="tabPrefill">Prefill TFLOPS</button>
+        <button class="tab-btn" data-tab="tabAttention">Attention Kernels</button>
+        <button class="tab-btn" data-tab="tabRoofline">Roofline Model</button>
+      </div>
+
+      <div class="tab-content active" id="tabDecode">
+        <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 12px;" id="decodeSummaryNotes">
+          Measures physical memory throughput during auto-regressive token generation across GEMV projections and KV-cache traversals.
+        </p>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Workload</th>
+              <th>Batch Size</th>
+              <th>Dimension / Context</th>
+              <th>Precision</th>
+              <th>Achieved Bandwidth</th>
+              <th>Latency (Median)</th>
+              <th>Bus Saturation</th>
+            </tr>
+          </thead>
+          <tbody id="decodeTableBody">
+            <tr><td colspan="7" style="text-align: center; color: var(--text-muted);">No benchmark run yet</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="tab-content" id="tabPrefill">
+        <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 12px;" id="prefillSummaryNotes">
+          Measures dense matrix multiplication compute throughput (TFLOPS) and prompt token intake rate.
+        </p>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Prompt Length</th>
+              <th>Batch Size</th>
+              <th>Hidden Dim</th>
+              <th>Precision</th>
+              <th>Throughput (TFLOPS)</th>
+              <th>Tokens / Second</th>
+              <th>Compute Efficiency</th>
+            </tr>
+          </thead>
+          <tbody id="prefillTableBody">
+            <tr><td colspan="7" style="text-align: center; color: var(--text-muted);">No benchmark run yet</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="tab-content" id="tabAttention">
+        <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 12px;" id="attentionSummaryNotes">
+          Compares PyTorch Scaled Dot-Product Attention (SDPA / FlashAttention) against standard unfused attention.
+        </p>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Sequence Length</th>
+              <th>Heads × Dim</th>
+              <th>Kernel Dispatch</th>
+              <th>Precision</th>
+              <th>TFLOPS</th>
+              <th>Latency (Median)</th>
+              <th>Speedup</th>
+            </tr>
+          </thead>
+          <tbody id="attentionTableBody">
+            <tr><td colspan="7" style="text-align: center; color: var(--text-muted);">No benchmark run yet</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="tab-content" id="tabRoofline">
+        <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 12px;" id="rooflineSummaryNotes">
+          Visualizes hardware operational intensity limits and machine balance point separating memory-bound decode from compute-bound prefill.
+        </p>
+        <div id="rooflineChartContainer" style="margin-top: 12px; min-height: 250px; display: flex; justify-content: center;">
+          <p style="color: var(--text-muted); font-size: 13px;">Loading Roofline curve...</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Reference Hardware Comparison Leaderboard -->
+    <section class="card" style="margin-bottom: 24px;">
+      <div class="card-title">Reference Silicon Leaderboard</div>
+      <p style="font-size: 13px; color: var(--text-secondary);">Verified theoretical peak bandwidth and half-precision TFLOPS across leading LLM architectures.</p>
+      <div class="leaderboard-grid" id="leaderboardGrid"></div>
+    </section>
+
+    <!-- Historical Runs -->
+    <section class="card">
+      <div class="card-title">Run History & Reference Baselines</div>
+      <div class="runs-list" id="runsList">
+        <p style="font-size: 13px; color: var(--text-muted);">Loading past runs...</p>
+      </div>
+    </section>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

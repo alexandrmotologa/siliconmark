@@ -1,0 +1,83 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" width="100%" height="100%">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0a0f1d" />
+      <stop offset="50%" stop-color="#0f172a" />
+      <stop offset="100%" stop-color="#020617" />
+    </linearGradient>
+    <linearGradient id="siliconGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1e293b" />
+      <stop offset="100%" stop-color="#0f172a" />
+    </linearGradient>
+    <linearGradient id="cyanGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8" />
+      <stop offset="50%" stop-color="#06b6d4" />
+      <stop offset="100%" stop-color="#0284c7" />
+    </linearGradient>
+    <linearGradient id="amberGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fbbf24" />
+      <stop offset="100%" stop-color="#f59e0b" />
+    </linearGradient>
+    <linearGradient id="borderGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.8" />
+      <stop offset="50%" stop-color="#818cf8" stop-opacity="0.3" />
+      <stop offset="100%" stop-color="#06b6d4" stop-opacity="0.6" />
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="6" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+  </defs>
+
+  <!-- Base Squircle Background -->
+  <rect x="12" y="12" width="216" height="216" rx="48" fill="url(#bgGrad)" stroke="url(#borderGrad)" stroke-width="2.5" />
+
+  <!-- Outer Bus Pins (North, South, East, West) -->
+  <g stroke="#38bdf8" stroke-width="2" stroke-linecap="round" opacity="0.65">
+    <!-- North Pins -->
+    <line x1="72" y1="20" x2="72" y2="40" />
+    <line x1="96" y1="20" x2="96" y2="40" />
+    <line x1="120" y1="20" x2="120" y2="40" />
+    <line x1="144" y1="20" x2="144" y2="40" />
+    <line x1="168" y1="20" x2="168" y2="40" />
+    <!-- South Pins -->
+    <line x1="72" y1="200" x2="72" y2="220" />
+    <line x1="96" y1="200" x2="96" y2="220" />
+    <line x1="120" y1="200" x2="120" y2="220" />
+    <line x1="144" y1="200" x2="144" y2="220" />
+    <line x1="168" y1="200" x2="168" y2="220" />
+    <!-- West Pins -->
+    <line x1="20" y1="72" x2="40" y2="72" />
+    <line x1="20" y1="96" x2="40" y2="96" />
+    <line x1="20" y1="120" x2="40" y2="120" />
+    <line x1="20" y1="144" x2="40" y2="144" />
+    <line x1="20" y1="168" x2="40" y2="168" />
+    <!-- East Pins -->
+    <line x1="200" y1="72" x2="220" y2="72" />
+    <line x1="200" y1="96" x2="220" y2="96" />
+    <line x1="200" y1="120" x2="220" y2="120" />
+    <line x1="200" y1="144" x2="220" y2="144" />
+    <line x1="200" y1="168" x2="220" y2="168" />
+  </g>
+
+  <!-- Silicon Die Package -->
+  <rect x="44" y="44" width="152" height="152" rx="20" fill="url(#siliconGrad)" stroke="#334155" stroke-width="2" />
+
+  <!-- Core Circuit Traces -->
+  <g stroke="#06b6d4" stroke-width="1.5" stroke-linecap="round" fill="none" opacity="0.4">
+    <path d="M 56 68 L 76 68 L 88 80 L 88 100" />
+    <path d="M 184 68 L 164 68 L 152 80 L 152 100" />
+    <path d="M 56 172 L 76 172 L 88 160 L 88 140" />
+    <path d="M 184 172 L 164 172 L 152 160 L 152 140" />
+  </g>
+
+  <!-- Central Compute Core Tile -->
+  <rect x="74" y="74" width="92" height="92" rx="14" fill="#0b1329" stroke="url(#cyanGrad)" stroke-width="2" filter="url(#glow)" />
+
+  <!-- Benchmark Stylized Greek Sigma & Speed Accent -->
+  <path d="M 148 94 L 98 94 L 118 120 L 98 146 L 148 146" fill="none" stroke="url(#cyanGrad)" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" />
+  
+  <!-- Dial / Benchmark Accent Pip -->
+  <circle cx="120" cy="120" r="4" fill="url(#amberGrad)" />
+  <line x1="120" y1="120" x2="136" y2="108" stroke="url(#amberGrad)" stroke-width="2.5" stroke-linecap="round" />
+</svg>
