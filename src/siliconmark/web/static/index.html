@@ -56,7 +56,9 @@
           </div>
         </div>
 
-        <div style="margin-top: 16px; display: flex; gap: 8px;" id="exportActionsGroup">
+        <div style="margin-top: 16px; display: flex; flex-wrap: wrap; gap: 8px;" id="exportActionsGroup">
+          <button class="btn-small" id="btnExportHtml" style="display: none;">Export HTML</button>
+          <button class="btn-small" id="btnExportBadge" style="display: none;">Export SVG Badge</button>
           <button class="btn-small" id="btnExportMd" style="display: none;">Export Markdown</button>
           <button class="btn-small" id="btnExportJson" style="display: none;">Export JSON</button>
         </div>
@@ -122,6 +124,9 @@
             </label>
             <label class="checkbox-label">
               <input type="checkbox" id="chkAttention" checked> SDPA Attention
+            </label>
+            <label class="checkbox-label">
+              <input type="checkbox" id="chkPower"> Power / Energy Telemetry
             </label>
           </div>
 

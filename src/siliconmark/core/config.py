@@ -250,4 +250,74 @@ class SiliconMarkRunResult(BaseModel):
     decode_result: Optional[DecodeBenchmarkResult] = None
     prefill_result: Optional[PrefillBenchmarkResult] = None
     attention_result: Optional[AttentionBenchmarkResult] = None
+    energy_result: Optional[EnergyMeasurement] = None
+    context_scaling_result: Optional[ContextScalingResult] = None
+    quantized_result: Optional[QuantizedBenchmarkResult] = None
+    interconnect_result: Optional[InterconnectResult] = None
     scores: Optional[SiliconMarkScores] = None
+
+
+class ContextScalingPoint(BaseModel):
+    """Measurement point for context window scaling."""
+    seq_len: int
+    latency_ms: float
+    sdpa_tflops: float
+    kv_cache_mb: float
+    scaling_factor: float = Field(
+        description="Observed latency scaling vs ideal linear baseline (1.0 = linear)",
+    )
+    status: str = "ok"
+
+
+class ContextScalingResult(BaseModel):
+    """Results from context length scaling sweep across long context windows."""
+    device_name: str
+    points: List[ContextScalingPoint]
+    max_tested_context: int
+    scaling_grade: str
+    summary_notes: str = ""
+
+
+class QuantizedPointResult(BaseModel):
+    """Measurement point for quantized INT8/INT4 GEMV & GEMM execution."""
+    format_name: str
+    m: int
+    n: int
+    k: int
+    batch_size: int
+    latency_ms: float
+    achieved_tops: float
+    effective_bandwidth_gbps: float
+    speedup_vs_fp16: float
+
+
+class QuantizedBenchmarkResult(BaseModel):
+    """Aggregated results for quantized kernel microbenchmark."""
+    device_name: str
+    int8_peak_tops: float
+    int4_peak_tops: float
+    peak_speedup_vs_fp16: float
+    points: List[QuantizedPointResult]
+    summary_notes: str = ""
+
+
+class EnergyMeasurement(BaseModel):
+    """Energy efficiency telemetry metrics."""
+    average_power_watts: float
+    peak_power_watts: float
+    energy_consumed_joules: float
+    tokens_per_joule: Optional[float] = None
+    tflops_per_watt: Optional[float] = None
+    sensor_source: str = "telemetry"
+
+
+class InterconnectResult(BaseModel):
+    """Multi-device peer-to-peer (P2P) and interconnect communication performance."""
+    device_count: int
+    p2p_supported: bool
+    bidirectional_bandwidth_gbps: float
+    unidirectional_bandwidth_gbps: float
+    all_reduce_latency_us: float
+    topology_type: str = "PCIe/NVLink"
+    summary_notes: str = ""
+

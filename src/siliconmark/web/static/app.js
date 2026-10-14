@@ -229,8 +229,23 @@ function renderBenchmarkResult(data) {
     document.getElementById("m3maxBar").style.width = `${Math.min(scores.relative_to_m3max_pct, 100)}%`;
 
     // Show export buttons
+    const btnHtml = document.getElementById("btnExportHtml");
+    const btnBadge = document.getElementById("btnExportBadge");
     const btnMd = document.getElementById("btnExportMd");
     const btnJson = document.getElementById("btnExportJson");
+
+    if (btnHtml) {
+      btnHtml.style.display = "inline-block";
+      btnHtml.onclick = () => {
+        window.open(`/api/runs/${data.run_id}/html`, "_blank");
+      };
+    }
+    if (btnBadge) {
+      btnBadge.style.display = "inline-block";
+      btnBadge.onclick = () => {
+        window.open(`/api/runs/${data.run_id}/badge`, "_blank");
+      };
+    }
     if (btnMd) {
       btnMd.style.display = "inline-block";
       btnMd.onclick = () => {
@@ -347,6 +362,7 @@ function setupBenchmarkRunner() {
       const dec = document.getElementById("chkDecode").checked;
       const pref = document.getElementById("chkPrefill").checked;
       const attn = document.getElementById("chkAttention").checked;
+      const power = document.getElementById("chkPower") ? document.getElementById("chkPower").checked : false;
 
       const res = await fetch("/api/benchmarks/run", {
         method: "POST",
@@ -357,6 +373,7 @@ function setupBenchmarkRunner() {
           run_decode: dec,
           run_prefill: pref,
           run_attention: attn,
+          measure_power: power,
         }),
       });
 

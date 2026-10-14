@@ -40,10 +40,15 @@ SiliconMark provides calibrated hardware measurements across both phases on bare
 - **Decode Memory Bandwidth Kernel**: Stride-aligned memory streaming microbenchmarks that measure sustained memory bus throughput and saturation percentage against manufacturer hardware specifications.
 - **Prefill Compute Benchmark**: Batched matrix multiplication kernels spanning FP16, BF16, and FP32 to measure sustained floating-point throughput in TFLOPS.
 - **Scaled Dot-Product Attention (SDPA) Benchmark**: Measures flash attention and memory-efficient kernel throughput against un-fused naive attention across varying sequence lengths and context windows.
+- **Context Length Scaling Curve**: Measures attention execution, KV-cache footprint, and scaling degradation from 1K to 64K+ token windows, assigning an efficiency scaling grade.
+- **Quantized Kernel Microbenchmark**: Evaluates authentic INT8 scaled GEMM/GEMV and packed INT4 dequantization streaming throughput (TOPS) and speedups over floating point baselines.
+- **Power and Energy Telemetry**: Real-time power sampling measuring Watts, Joules consumed, Tokens per Joule, and TFLOPS per Watt.
+- **Multi-Device & Interconnect Benchmark**: Evaluates Peer-to-Peer (P2P) memory copy bandwidth (GB/s) and All-Reduce collective synchronization latency across multi-accelerator rigs and host interconnects.
 - **Hardware Roofline Model**: Calculates machine balance ($I_{\text{knee}} = \text{Peak GFLOPS} / \text{Peak Bandwidth GB/s}$) and classifies operational intensity into bandwidth-bound and compute-bound regimes.
 - **LLM Sizing and Latency Estimator**: Computes weight memory, KV cache footprint ($2 \times n_{\text{layers}} \times d_{\text{kv}} \times n_{\text{ctx}} \times \text{dtype}$), decode tokens per second, and time-to-first-token (TTFT) across quantized formats (FP16, Q8_0, Q4_K_M, Q2_K).
 - **Calibrated Scoring Engine**: Standardized 0 to 10,000+ point scoring index calibrated against an NVIDIA GeForce RTX 4090 desktop baseline (10,000 points) and Apple M3 Max (7,500 points).
 - **Interactive Web Dashboard and REST API**: FastAPI backend providing hardware telemetry, live test execution, interactive charts, and model sizing calculators.
+- **Standalone HTML and Dynamic Badge Exporters**: Exports standalone responsive HTML reports and shields.io-compatible vector SVG score badges.
 
 ---
 
@@ -61,6 +66,7 @@ SiliconMark provides calibrated hardware measurements across both phases on bare
 | **Prefill Throughput** | Prompt Ingestion | $2 \times M \times N \times K / \Delta t$ (TFLOPS) | Tensor core compute density |
 | **Attention Kernel** | Attention Blocks | $4 \times B \times H \times S^2 \times D / \Delta t$ | SRAM reuse and kernel fusion |
 | **Machine Balance** | Roofline Knee | $\text{Peak TFLOPS} / \text{Peak Bandwidth}$ | Architectural inflection |
+| **Energy Efficiency** | Sustained Inference | $\text{Tokens} / \text{Joules}$ or $\text{TFLOPS} / \text{Watt}$ | Power draw & thermal throttling |
 
 ---
 
@@ -116,7 +122,7 @@ pip install -e ".[dev]"
 
 ## CLI Reference
 
-SiliconMark exposes a CLI with formatted terminal output via Typer and Rich.
+SiliconMark exposes a comprehensive CLI with formatted terminal output via Typer and Rich.
 
 ### 1. Hardware Inspection
 
@@ -128,21 +134,44 @@ siliconmark info
 
 ### 2. Run Benchmarks
 
-Run the standard suite or quick validation pass:
+Run the standard suite, quick validation pass, or include real-time power telemetry:
 
 ```bash
 # Run quick benchmark pass
 siliconmark run --quick
 
-# Run full comprehensive suite on specific device
-siliconmark run --device cuda --index 0
+# Run with real-time power and energy profiling
+siliconmark run --quick --power
 
-# Export results to Markdown and JSON
-siliconmark run --quick --output benchmark_report.md
-siliconmark run --quick --output benchmark_report.json
+# Export results to HTML, Markdown, and dynamic SVG badge
+siliconmark run --quick --output benchmark_report.html --badge score_badge.svg
 ```
 
-### 3. Roofline Analysis
+### 3. Context Length Scaling
+
+Measure kernel throughput and KV-cache footprint degradation across context lengths:
+
+```bash
+siliconmark context-scaling --quick --svg context_curve.svg
+```
+
+### 4. Quantized Kernel Microbenchmark
+
+Benchmark INT8 and packed INT4 matrix-vector (GEMV) and GEMM execution:
+
+```bash
+siliconmark quantized --quick
+```
+
+### 5. Multi-Device & Interconnect
+
+Benchmark Peer-to-Peer (P2P) copy throughput and All-Reduce latency:
+
+```bash
+siliconmark interconnect
+```
+
+### 6. Roofline Analysis
 
 Generate terminal diagrams or export standalone SVG charts:
 
@@ -150,7 +179,7 @@ Generate terminal diagrams or export standalone SVG charts:
 siliconmark roofline --svg roofline_chart.svg
 ```
 
-### 4. Real-World LLM Inference Estimator
+### 7. Real-World LLM Inference Estimator
 
 Calculate expected tokens per second and memory footprint for open-weight models:
 
@@ -159,17 +188,25 @@ siliconmark estimate --model llama-3-8b --quant q4_k_m --context 4096
 siliconmark estimate --model llama-3-70b --quant q4_k_m --context 8192
 ```
 
-### 5. Compare Hardware
+### 8. Compare Hardware
 
 Compare benchmark runs side by side against reference hardware or previous runs:
 
 ```bash
-# Compare current run against reference RTX 4090 or Apple M3 Max
 siliconmark compare latest rtx4090
 siliconmark compare latest m3max
 ```
 
-### 6. Web Dashboard Server
+### 9. Export Reports & Badges
+
+Convert any existing run to standalone HTML, Markdown, JSON, or SVG badge:
+
+```bash
+siliconmark export latest --format html --output report.html
+siliconmark export latest --format badge --output badge.svg
+```
+
+### 10. Web Dashboard Server
 
 Start the interactive browser dashboard and REST API server:
 
@@ -199,16 +236,6 @@ $$\text{Score} = 10{,}000 \times \left( 0.45 \times \frac{\text{BW}_{\text{susta
 
 ---
 
-## Supported Reference Architectures
-
-SiliconMark ships with built-in reference specifications:
-
-- **NVIDIA**: RTX 5090, RTX 4090, RTX 4080, RTX 3090, A100 SXM4 80GB, H100 SXM5 80GB
-- **Apple Silicon**: M4 Pro, M3 Max (16-core CPU / 40-core GPU), M3 Pro, M2 Ultra, M1 Pro
-- **AMD ROCm**: Radeon RX 7900 XTX, Instinct MI300X, Instinct MI250X
-
----
-
 ## REST API Endpoints
 
 When running `siliconmark serve`, the following endpoints are exposed:
@@ -218,22 +245,28 @@ When running `siliconmark serve`, the following endpoints are exposed:
 - `GET /api/roofline`: Computed roofline parameters, knee point, and SVG diagram.
 - `GET /api/models`: Catalog of supported LLM architectures and quantization sizes.
 - `POST /api/estimate`: Calculate memory footprint and inference speed for specific configurations.
-- `POST /api/benchmark`: Trigger asynchronous benchmark execution.
-- `GET /api/benchmark/status`: Poll status of ongoing or completed benchmark runs.
+- `POST /api/benchmarks/run`: Trigger asynchronous benchmark execution.
+- `POST /api/context-scaling`: Run context window scaling sweep with SVG chart.
+- `POST /api/quantized`: Run INT8 and packed INT4 kernel microbenchmarks.
+- `GET /api/interconnect`: Evaluate P2P memory copy and collective synchronization.
+- `GET /api/compare`: Retrieve side-by-side comparison between two runs.
+- `GET /api/status`: Poll status of ongoing or completed benchmark runs.
 - `GET /api/runs`: List historical benchmark JSON records.
+- `GET /api/runs/{run_id}/html`: Download standalone interactive HTML report.
+- `GET /api/runs/{run_id}/badge`: Download vector SVG score badge.
 - `GET /api/runs/{run_id}/markdown`: Retrieve benchmark summary formatted as Markdown.
 
 ---
 
 ## Test Suite
 
-SiliconMark includes full unit and integration tests covering configuration validation, memory bandwidth calculations, GEMM prefill, SDPA kernels, scoring calibration, CLI invocation, and FastAPI routes.
+SiliconMark includes comprehensive unit and integration tests covering configuration validation, memory bandwidth calculations, GEMM prefill, SDPA kernels, context length scaling, quantization kernels, power telemetry, interconnect, scoring calibration, CLI invocation, and FastAPI routes.
 
 ```bash
 pytest -v
 ```
 
-All 37 test cases pass on standard Python 3.10+ environments.
+All 50 test cases pass on standard Python 3.10+ environments.
 
 ---
 

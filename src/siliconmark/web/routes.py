@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
+import tempfile
 from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, HTTPException, Query, Response
 from pydantic import BaseModel
 
+from siliconmark.benchmarks.context import generate_context_scaling_svg
 from siliconmark.benchmarks.runner import BenchmarkRunner
 from siliconmark.core.config import BenchmarkRunConfig, DeviceInfo, SiliconMarkRunResult
 from siliconmark.core.database import HARDWARE_DATABASE
@@ -17,7 +19,11 @@ from siliconmark.core.estimator import (
 )
 from siliconmark.core.hardware import detect_device_info
 from siliconmark.core.roofline import calculate_roofline, generate_roofline_svg
-from siliconmark.exporters.markdown_exporter import export_to_markdown
+from siliconmark.exporters import (
+    export_badge,
+    export_to_html,
+    export_to_markdown,
+)
 
 router = APIRouter(prefix="/api")
 
@@ -37,6 +43,7 @@ class RunRequest(BaseModel):
     run_decode: bool = True
     run_prefill: bool = True
     run_attention: bool = True
+    measure_power: bool = False
 
 
 class EstimateRequest(BaseModel):
@@ -45,6 +52,17 @@ class EstimateRequest(BaseModel):
     context_tokens: int = 4096
     batch_size: int = 1
     device: str = "auto"
+
+
+class ContextScalingRequest(BaseModel):
+    device: str = "auto"
+    quick_mode: bool = True
+    max_context: Optional[int] = 4096
+
+
+class QuantizedRequest(BaseModel):
+    device: str = "auto"
+    quick_mode: bool = True
 
 
 @router.get("/system", response_model=DeviceInfo)
@@ -144,6 +162,7 @@ async def trigger_benchmark(req: RunRequest) -> Dict[str, Any]:
                 run_decode=req.run_decode,
                 run_prefill=req.run_prefill,
                 run_attention=req.run_attention,
+                measure_power=req.measure_power,
             ),
         )
 
@@ -160,6 +179,57 @@ async def trigger_benchmark(req: RunRequest) -> Dict[str, Any]:
         BENCHMARK_STATUS["current_stage"] = "error"
         BENCHMARK_STATUS["message"] = str(exc)
         raise HTTPException(status_code=500, detail=str(exc))
+
+
+@router.post("/context-scaling")
+async def run_context_scaling_api(req: ContextScalingRequest) -> Dict[str, Any]:
+    """Run context length scaling benchmark via API."""
+    loop = asyncio.get_event_loop()
+    runner = BenchmarkRunner(device_str=req.device)
+    res = await loop.run_in_executor(
+        None,
+        lambda: runner.run_context_scaling(quick_mode=req.quick_mode, max_context=req.max_context),
+    )
+    svg = generate_context_scaling_svg(res)
+    data = res.model_dump()
+    data["svg_chart"] = svg
+    return data
+
+
+@router.post("/quantized")
+async def run_quantized_api(req: QuantizedRequest) -> Dict[str, Any]:
+    """Run quantized kernel microbenchmark via API."""
+    loop = asyncio.get_event_loop()
+    runner = BenchmarkRunner(device_str=req.device)
+    res = await loop.run_in_executor(
+        None,
+        lambda: runner.run_quantized(quick_mode=req.quick_mode),
+    )
+    return res.model_dump()
+
+
+@router.get("/interconnect")
+async def run_interconnect_api(device: str = "auto") -> Dict[str, Any]:
+    """Run interconnect and P2P communication benchmark via API."""
+    loop = asyncio.get_event_loop()
+    runner = BenchmarkRunner(device_str=device)
+    res = await loop.run_in_executor(
+        None,
+        lambda: runner.run_interconnect(),
+    )
+    return res.model_dump()
+
+
+@router.get("/compare")
+def compare_runs(id1: str = Query(...), id2: str = Query(...)) -> Dict[str, Any]:
+    """Compare two benchmark runs side by side."""
+    run1 = SiliconMarkRunResult.model_validate(get_run_details(id1))
+    run2 = SiliconMarkRunResult.model_validate(get_run_details(id2))
+
+    return {
+        "run1": run1.model_dump(),
+        "run2": run2.model_dump(),
+    }
 
 
 @router.get("/runs")
@@ -220,7 +290,6 @@ def get_run_details(run_id: str) -> Dict[str, Any]:
 
     target: Optional[Path] = None
 
-    # Check results dir
     if results_dir.exists():
         if (results_dir / f"{run_id}.json").exists():
             target = results_dir / f"{run_id}.json"
@@ -229,7 +298,6 @@ def get_run_details(run_id: str) -> Dict[str, Any]:
             if matches:
                 target = matches[0]
 
-    # Check fixtures dir
     if not target and fixtures_dir.exists():
         if (fixtures_dir / f"{run_id}.json").exists():
             target = fixtures_dir / f"{run_id}.json"
@@ -250,20 +318,44 @@ def download_run_markdown(run_id: str) -> Response:
     """Export benchmark run as Markdown report."""
     res_dict = get_run_details(run_id)
     run_res = SiliconMarkRunResult.model_validate(res_dict)
-    
-    # Generate in-memory markdown
-    from io import StringIO
-    import tempfile
-    
+
     with tempfile.NamedTemporaryFile("w+", suffix=".md", delete=False, encoding="utf-8") as tmp:
         tmp_path = Path(tmp.name)
-    
+
     export_to_markdown(run_res, tmp_path)
     content = tmp_path.read_text(encoding="utf-8")
     tmp_path.unlink(missing_ok=True)
-    
+
     return Response(
         content=content,
         media_type="text/markdown",
         headers={"Content-Disposition": f'attachment; filename="{run_id}_report.md"'},
+    )
+
+
+@router.get("/runs/{run_id}/html")
+def download_run_html(run_id: str) -> Response:
+    """Export benchmark run as standalone interactive HTML report."""
+    res_dict = get_run_details(run_id)
+    run_res = SiliconMarkRunResult.model_validate(res_dict)
+
+    html = export_to_html(run_res)
+    return Response(
+        content=html,
+        media_type="text/html",
+        headers={"Content-Disposition": f'attachment; filename="{run_id}_report.html"'},
+    )
+
+
+@router.get("/runs/{run_id}/badge")
+def download_run_badge(run_id: str) -> Response:
+    """Export benchmark run score as vector SVG badge."""
+    res_dict = get_run_details(run_id)
+    run_res = SiliconMarkRunResult.model_validate(res_dict)
+
+    svg = export_badge(run_res, badge_type="score")
+    return Response(
+        content=svg,
+        media_type="image/svg+xml",
+        headers={"Content-Disposition": f'attachment; filename="{run_id}_badge.svg"'},
     )

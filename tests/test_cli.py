@@ -55,12 +55,48 @@ def test_cli_compare_aliases():
     assert "M3 Max" in res.output
 
 
+def test_cli_context_scaling(tmp_path: Path):
+    svg_out = tmp_path / "context.svg"
+    res = runner.invoke(app, ["context-scaling", "--device", "cpu", "--quick", "--max-context", "2048", "--svg", str(svg_out)])
+    assert res.exit_code == 0
+    assert "Context Length Scaling Curve" in res.output
+    assert svg_out.exists()
+
+
+def test_cli_quantized():
+    res = runner.invoke(app, ["quantized", "--device", "cpu", "--quick"])
+    assert res.exit_code == 0
+    assert "Quantized Kernel Microbenchmark" in res.output
+    assert "TOPS" in res.output
+
+
+def test_cli_interconnect():
+    res = runner.invoke(app, ["interconnect", "--device", "cpu"])
+    assert res.exit_code == 0
+    assert "Interconnect & P2P Benchmark" in res.output
+    assert "Accelerators Detected" in res.output
+
+
+def test_cli_export(tmp_path: Path):
+    badge_out = tmp_path / "badge.svg"
+    res_b = runner.invoke(app, ["export", "rtx4090", "--format", "badge", "--output", str(badge_out)])
+    assert res_b.exit_code == 0
+    assert badge_out.exists()
+
+    html_out = tmp_path / "report.html"
+    res_h = runner.invoke(app, ["export", "rtx4090", "--format", "html", "--output", str(html_out)])
+    assert res_h.exit_code == 0
+    assert html_out.exists()
+
+
 def test_cli_run_quick(tmp_path: Path):
     out_json = tmp_path / "result.json"
-    result = runner.invoke(app, ["run", "--device", "cpu", "--quick", "--output", str(out_json)])
+    badge_svg = tmp_path / "badge.svg"
+    result = runner.invoke(app, ["run", "--device", "cpu", "--quick", "--power", "--output", str(out_json), "--badge", str(badge_svg)])
     assert result.exit_code == 0
     assert "OVERALL SILICONMARK SCORE" in result.output
     assert out_json.exists()
+    assert badge_svg.exists()
 
     out_md = tmp_path / "result.md"
     result_md = runner.invoke(app, ["run", "--device", "cpu", "--quick", "--output", str(out_md)])

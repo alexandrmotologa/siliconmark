@@ -11,6 +11,7 @@ from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TimeElapsedColumn
 from rich.table import Table
 
+from siliconmark.benchmarks.context import generate_context_scaling_svg
 from siliconmark.benchmarks.runner import BenchmarkRunner
 from siliconmark.core.config import BenchmarkRunConfig, SiliconMarkRunResult
 from siliconmark.core.database import HARDWARE_DATABASE
@@ -25,7 +26,12 @@ from siliconmark.core.roofline import (
     generate_ascii_roofline,
     generate_roofline_svg,
 )
-from siliconmark.exporters.markdown_exporter import export_to_markdown
+from siliconmark.exporters import (
+    export_badge,
+    export_to_html,
+    export_to_json,
+    export_to_markdown,
+)
 
 app = typer.Typer(
     name="siliconmark",
@@ -107,7 +113,9 @@ def run(
     decode_only: bool = typer.Option(False, "--decode-only", help="Run only decode memory bandwidth benchmark"),
     prefill_only: bool = typer.Option(False, "--prefill-only", help="Run only prefill TFLOPS benchmark"),
     attention_only: bool = typer.Option(False, "--attention-only", help="Run only attention kernel efficiency benchmark"),
-    output: Optional[str] = typer.Option(None, "--output", "-o", help="Save benchmark results to file path (.json or .md)"),
+    power: bool = typer.Option(False, "--power", help="Sample real-time power draw and calculate Tokens/Joule & TFLOPS/Watt"),
+    output: Optional[str] = typer.Option(None, "--output", "-o", help="Save benchmark results to file path (.json, .md, or .html)"),
+    badge: Optional[str] = typer.Option(None, "--badge", help="Export dynamic SVG badge to path"),
     ci: bool = typer.Option(False, "--ci", help="Output GitHub Actions step summary format to stdout"),
 ) -> None:
     """Execute SiliconMark benchmarks and output standardized composite score."""
@@ -128,7 +136,8 @@ def run(
             Panel.fit(
                 f"[bold green]Starting SiliconMark Benchmark Suite[/bold green]\n"
                 f"Target: [cyan]{runner.device_info.device_name}[/cyan] ([yellow]{runner.device_info.device_type.upper()}[/yellow])\n"
-                f"Mode: [magenta]{'Quick (abbreviated matrix)' if quick else 'Standard Comprehensive'}[/magenta]",
+                f"Mode: [magenta]{'Quick (abbreviated matrix)' if quick else 'Standard Comprehensive'}[/magenta]\n"
+                f"Power Telemetry: [yellow]{'Active' if power else 'Disabled'}[/yellow]",
                 title="[bold yellow]SiliconMark[/bold yellow]",
                 border_style="yellow",
             )
@@ -154,6 +163,7 @@ def run(
             run_decode=run_decode,
             run_prefill=run_prefill,
             run_attention=run_attention,
+            measure_power=power,
         )
         progress.update(task, completed=100, description="[bold green]Benchmark completed![/bold green]")
 
@@ -164,9 +174,9 @@ def run(
             f"[bold yellow]OVERALL SILICONMARK SCORE:[/bold yellow] [bold white]{scores.overall_score:,}[/bold white]\n"
             f"[bold cyan]Classification:[/bold cyan] {scores.tier_classification}\n"
             f"[bold green]Efficiency Grade:[/bold green] [bold magenta]{scores.efficiency_grade}[/bold magenta]\n\n"
-            f"• Decode Bandwidth Score: [bold]{scores.decode_score:,}[/bold] (45% weight)\n"
-            f"• Prefill Compute Score:  [bold]{scores.prefill_score:,}[/bold] (35% weight)\n"
-            f"• Attention Efficiency:   [bold]{scores.attention_score:,}[/bold] (20% weight)\n\n"
+            f"- Decode Bandwidth Score: [bold]{scores.decode_score:,}[/bold] (45% weight)\n"
+            f"- Prefill Compute Score:  [bold]{scores.prefill_score:,}[/bold] (35% weight)\n"
+            f"- Attention Efficiency:   [bold]{scores.attention_score:,}[/bold] (20% weight)\n\n"
             f"Index vs RTX 4090 baseline: [cyan]{scores.relative_to_rtx4090_pct}%[/cyan]\n"
             f"Index vs Apple M3 Max:      [cyan]{scores.relative_to_m3max_pct}%[/cyan]"
         )
@@ -205,6 +215,16 @@ def run(
                 f"Mean Speedup: {a.mean_speedup:.2f}x",
             )
 
+        if result.energy_result:
+            e = result.energy_result
+            tpj = f"{e.tokens_per_joule:.1f} Tok/J" if e.tokens_per_joule else "N/A"
+            tfw = f"{e.tflops_per_watt:.4f} TF/W" if e.tflops_per_watt else "N/A"
+            table.add_row(
+                "Energy & Power Draw",
+                f"Avg: {e.average_power_watts:.1f} W (Peak: {e.peak_power_watts:.1f} W) | Total: {e.energy_consumed_joules:.1f} J",
+                f"{tpj} | {tfw}",
+            )
+
         console.print(table)
         console.print(f"[dim]Run ID: {result.run_id} | Saved to: results/{result.run_id}.json[/dim]")
 
@@ -220,11 +240,152 @@ def run(
     if output:
         out_p = Path(output)
         if out_p.suffix.lower() == ".json":
-            out_p.write_text(result.model_dump_json(indent=2), encoding="utf-8")
+            export_to_json(result, out_p)
             console.print(f"[bold green]Saved JSON report to {output}[/bold green]")
+        elif out_p.suffix.lower() == ".html":
+            export_to_html(result, out_p)
+            console.print(f"[bold green]Saved HTML report to {output}[/bold green]")
         else:
             export_to_markdown(result, out_p)
             console.print(f"[bold green]Saved Markdown report to {output}[/bold green]")
+
+    if badge:
+        export_badge(result, badge, badge_type="score")
+        console.print(f"[bold green]Exported SVG score badge to {badge}[/bold green]")
+
+
+@app.command("context-scaling")
+def context_scaling(
+    device: str = typer.Option("auto", "--device", "-d", help="Compute device: auto, cpu, cuda, mps, rocm"),
+    quick: bool = typer.Option(False, "--quick", "-q", help="Run abbreviated context sweep"),
+    max_context: Optional[int] = typer.Option(None, "--max-context", "-m", help="Upper bound on sequence length in tokens"),
+    svg: Optional[Path] = typer.Option(None, "--svg", help="Save scaling curve SVG chart to file"),
+) -> None:
+    """Benchmark kernel execution, memory footprint, and scaling degradation across context windows."""
+    runner = BenchmarkRunner(device_str=device)
+
+    with console.status("[bold cyan]Running context scaling sweep...[/bold cyan]"):
+        res = runner.run_context_scaling(quick_mode=quick, max_context=max_context)
+
+    table = Table(title=f"[bold yellow]Context Length Scaling Curve: {res.device_name}[/bold yellow]")
+    table.add_column("Seq Length", style="cyan")
+    table.add_column("Latency", style="yellow")
+    table.add_column("SDPA TFLOPS", style="green")
+    table.add_column("KV Cache VRAM", style="magenta")
+    table.add_column("Scaling Factor", style="bold white")
+    table.add_column("Status", style="bold")
+
+    for pt in res.points:
+        stat_color = "green" if pt.status == "ok" else "red"
+        table.add_row(
+            f"{pt.seq_len:,} tokens",
+            f"{pt.latency_ms:.2f} ms" if pt.status == "ok" else "N/A",
+            f"{pt.sdpa_tflops:.3f}" if pt.status == "ok" else "N/A",
+            f"{pt.kv_cache_mb:.1f} MB",
+            f"{pt.scaling_factor:.2f}x (vs linear)",
+            f"[{stat_color}]{pt.status.upper()}[/{stat_color}]",
+        )
+
+    console.print(table)
+    console.print(Panel(f"Scaling Grade: [bold green]{res.scaling_grade}[/bold green]\n{res.summary_notes}", title="[bold]Assessment[/bold]"))
+
+    if svg:
+        svg_content = generate_context_scaling_svg(res)
+        svg.write_text(svg_content, encoding="utf-8")
+        console.print(f"[bold green]Saved Context Scaling SVG chart to {svg}[/bold green]")
+
+
+@app.command("quantized")
+def quantized_cmd(
+    device: str = typer.Option("auto", "--device", "-d", help="Compute device: auto, cpu, cuda, mps, rocm"),
+    quick: bool = typer.Option(False, "--quick", "-q", help="Run abbreviated quantized matrix"),
+) -> None:
+    """Microbenchmark INT8 & packed INT4 matrix-vector and GEMM execution throughput."""
+    runner = BenchmarkRunner(device_str=device)
+
+    with console.status("[bold cyan]Benchmarking quantized integer kernels...[/bold cyan]"):
+        res = runner.run_quantized(quick_mode=quick)
+
+    table = Table(title=f"[bold yellow]SiliconMark Quantized Kernel Microbenchmark: {res.device_name}[/bold yellow]")
+    table.add_column("Kernel Configuration", style="cyan")
+    table.add_column("Latency", style="yellow")
+    table.add_column("Throughput", style="green")
+    table.add_column("Effective Bandwidth", style="magenta")
+    table.add_column("Speedup vs Float", style="bold green")
+
+    for pt in res.points:
+        table.add_row(
+            pt.format_name,
+            f"{pt.latency_ms:.3f} ms",
+            f"{pt.achieved_tops:.2f} TOPS",
+            f"{pt.effective_bandwidth_gbps:.1f} GB/s",
+            f"{pt.speedup_vs_fp16:.2f}x",
+        )
+
+    console.print(table)
+    summary_panel = (
+        f"Peak INT8 Throughput: [bold cyan]{res.int8_peak_tops:.2f} TOPS[/bold cyan]\n"
+        f"Peak INT4 Throughput: [bold green]{res.int4_peak_tops:.2f} TOPS[/bold green]\n"
+        f"Peak Speedup vs FP16: [bold yellow]{res.peak_speedup_vs_fp16:.2f}x[/bold yellow]"
+    )
+    console.print(Panel(summary_panel, title="[bold]Quantization Assessment[/bold]", border_style="cyan"))
+
+
+@app.command("interconnect")
+def interconnect_cmd(
+    device: str = typer.Option("auto", "--device", "-d", help="Compute device probe target"),
+) -> None:
+    """Benchmark multi-GPU Peer-to-Peer (P2P) interconnect bandwidth and synchronization latency."""
+    runner = BenchmarkRunner(device_str=device)
+
+    with console.status("[bold cyan]Evaluating interconnect and P2P communication...[/bold cyan]"):
+        res = runner.run_interconnect()
+
+    table = Table(title="[bold yellow]SiliconMark Interconnect & P2P Benchmark[/bold yellow]")
+    table.add_column("Property", style="cyan")
+    table.add_column("Measurement / Value", style="magenta")
+
+    table.add_row("Accelerators Detected", str(res.device_count))
+    table.add_row("P2P Direct Access", "[green]SUPPORTED[/green]" if res.p2p_supported else "[yellow]UNSUPPORTED / SINGLE DEV[/yellow]")
+    table.add_row("Interconnect Topology", res.topology_type)
+    table.add_row("Unidirectional Bandwidth", f"{res.unidirectional_bandwidth_gbps:.2f} GB/s")
+    table.add_row("Bidirectional Bandwidth", f"{res.bidirectional_bandwidth_gbps:.2f} GB/s")
+    table.add_row("All-Reduce Sync Latency", f"{res.all_reduce_latency_us:.2f} \u00b5s")
+
+    console.print(table)
+    console.print(Panel(res.summary_notes, title="[bold]Interconnect Summary[/bold]", border_style="yellow"))
+
+
+@app.command("export")
+def export_cmd(
+    target: str = typer.Argument("latest", help="Run ID, JSON file, or alias (latest, rtx4090, m3max)"),
+    format: str = typer.Option("html", "--format", "-f", help="Export format: html, md, json, badge"),
+    output: Path = typer.Option(..., "--output", "-o", help="Target output file path"),
+) -> None:
+    """Export benchmark run results to standalone HTML, Markdown, JSON, or SVG badge."""
+    path = _resolve_result_file(target)
+    if not path.exists():
+        console.print(f"[bold red]Error: Could not find result {target}[/bold red]")
+        raise typer.Exit(code=1)
+
+    result = SiliconMarkRunResult.model_validate_json(path.read_text(encoding="utf-8"))
+
+    fmt = format.lower()
+    if fmt == "html":
+        export_to_html(result, output)
+        console.print(f"[bold green]Exported standalone HTML report to {output}[/bold green]")
+    elif fmt == "badge":
+        export_badge(result, output, badge_type="score")
+        console.print(f"[bold green]Exported SVG badge to {output}[/bold green]")
+    elif fmt == "md" or fmt == "markdown":
+        export_to_markdown(result, output)
+        console.print(f"[bold green]Exported Markdown report to {output}[/bold green]")
+    elif fmt == "json":
+        export_to_json(result, output)
+        console.print(f"[bold green]Exported JSON report to {output}[/bold green]")
+    else:
+        console.print(f"[bold red]Unknown format: {format}. Use html, md, json, or badge.[/bold red]")
+        raise typer.Exit(code=1)
 
 
 @app.command()
@@ -321,7 +482,7 @@ def list_models() -> None:
             m.name,
             f"{m.total_params_billion:.1f}B",
             f"{m.active_params_billion:.1f}B",
-            f"{m.num_layers}L • {gqa}",
+            f"{m.num_layers}L \u2022 {gqa}",
         )
 
     console.print(table)
