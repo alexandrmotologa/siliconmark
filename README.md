@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/images/siliconmark_logo.svg" width="130" alt="SiliconMark Logo" />
+  <img src="docs/images/logo.png" width="130" style="border-radius: 28px;" alt="SiliconMark Logo" />
 </p>
 
 <h1 align="center">SiliconMark</h1>
@@ -75,7 +75,7 @@ SiliconMark provides calibrated hardware measurements across both phases on bare
 The Roofline model couples achievable throughput with operational intensity (FLOPs per byte moved). SiliconMark calculates the exact balance knee point for the detected silicon.
 
 <p align="center">
-  <img src="docs/images/siliconmark_roofline.svg" alt="SiliconMark Roofline Model Diagram" width="800" />
+  <img src="docs/images/siliconmark_roofline.png" alt="SiliconMark Roofline Model Interactive Chart" width="920" />
 </p>
 
 ```
@@ -215,6 +215,10 @@ siliconmark serve --host 127.0.0.1 --port 8000
 ```
 
 Open `http://localhost:8000` to access the dashboard.
+
+<p align="center">
+  <img src="docs/images/siliconmark_benchmarks.png" alt="SiliconMark Kernel Telemetry & Breakdown" width="920" />
+</p>
 
 ---
 
